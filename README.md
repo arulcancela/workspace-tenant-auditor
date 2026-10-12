@@ -38,6 +38,12 @@ tenant-auditor audit --domain ejemplo.com --output ./reports
 - **Equipos de seguridad / compliance** que quieren evidencia auditable
   y repetible (ideal para alimentar un proceso de remediación).
 
+## 🎬 Demo
+
+Así funciona la herramienta (ejecución real, modo demo sin credenciales):
+
+![Demo de workspace-tenant-auditor](docs/img/demo.gif)
+
 ## Captura del informe
 
 **Resumen ejecutivo** — puntuación de postura (0-100) y conteo por severidad:
