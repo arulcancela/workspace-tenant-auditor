@@ -1,0 +1,76 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "workspace-tenant-auditor"
+version = "1.0.0"
+description = "Auditor de seguridad y cumplimiento para tenants de Google Workspace. Genera informes ejecutivos HTML/PDF con hallazgos clasificados por severidad."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+    { name = "AI-Augmented Engineer & Cloud Automation Architect" }
+]
+keywords = ["google-workspace", "security", "audit", "compliance", "automation", "gam"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: System Administrators",
+    "Topic :: Security",
+    "Topic :: System :: Systems Administration",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "google-api-python-client>=2.100.0",
+    "google-auth>=2.25.0",
+    "google-auth-httplib2>=0.1.1",
+    "jinja2>=3.1.3",
+    "weasyprint>=61.0",
+    "typer>=0.12.0",
+    "pydantic>=2.6.0",
+    "pydantic-settings>=2.2.0",
+    "python-dotenv>=1.0.0",
+    "rich>=13.7.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.12.0",
+    "ruff>=0.3.0",
+    "mypy>=1.9.0",
+]
+
+[project.scripts]
+tenant-auditor = "tenant_auditor.cli:app"
+
+[project.urls]
+Homepage = "https://github.com/arulcancela/workspace-tenant-auditor"
+Repository = "https://github.com/arulcancela/workspace-tenant-auditor"
+Issues = "https://github.com/arulcancela/workspace-tenant-auditor/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/tenant_auditor"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B", "C4", "SIM", "N"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra -q --cov=src/tenant_auditor --cov-report=term-missing"
+pythonpath = ["src"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true

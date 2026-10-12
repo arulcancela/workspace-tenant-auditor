@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Informe de auditoría — {{ report.domain }}</title>
+<style>
+  :root {
+    --critica: #b71c1c; --alta: #e65100; --media: #f9a825;
+    --baja: #2e7d32; --informativa: #1565c0;
+    --bg: #f5f6f8; --card: #ffffff; --text: #1f2933; --muted: #6b7280;
+  }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+         margin: 0; background: var(--bg); color: var(--text); line-height: 1.55; }
+  .container { max-width: 1080px; margin: 0 auto; padding: 32px 24px 64px; }
+  header { border-bottom: 3px solid var(--text); padding-bottom: 16px; margin-bottom: 32px; }
+  h1 { font-size: 28px; margin: 0 0 4px; }
+  h2 { font-size: 20px; margin: 40px 0 12px; border-left: 4px solid var(--text); padding-left: 10px; }
+  .meta { color: var(--muted); font-size: 14px; }
+  .cards { display: flex; flex-wrap: wrap; gap: 16px; margin: 24px 0; }
+  .card { flex: 1 1 140px; background: var(--card); border-radius: 10px; padding: 16px;
+          box-shadow: 0 1px 3px rgba(0,0,0,.08); text-align: center; }
+  .card .num { font-size: 32px; font-weight: 700; }
+  .card .lbl { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+  .score { font-size: 44px; font-weight: 800; }
+  table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: 10px; overflow: hidden;
+          box-shadow: 0 1px 3px rgba(0,0,0,.08); margin-bottom: 12px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #eceff1; font-size: 14px; vertical-align: top; }
+  th { background: #eceff1; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
+  .sev { display: inline-block; padding: 2px 10px; border-radius: 12px; color: #fff; font-size: 12px; font-weight: 700; }
+  .sev.critica { background: var(--critica); } .sev.alta { background: var(--alta); }
+  .sev.media { background: var(--media); color: #333; } .sev.baja { background: var(--baja); }
+  .sev.informativa { background: var(--informativa); }
+  .bar-row { display: flex; align-items: center; gap: 10px; margin: 6px 0; font-size: 13px; }
+  .bar-label { width: 110px; color: var(--muted); }
+  .bar-track { flex: 1; background: #eceff1; border-radius: 6px; overflow: hidden; height: 18px; }
+  .bar-fill { height: 100%; border-radius: 6px; }
+  .finding { background: var(--card); border-radius: 10px; padding: 18px 20px; margin-bottom: 16px;
+             box-shadow: 0 1px 3px rgba(0,0,0,.08); border-left: 5px solid #ccc; }
+  .finding.critica { border-left-color: var(--critica); } .finding.alta { border-left-color: var(--alta); }
+  .finding.media { border-left-color: var(--media); } .finding.baja { border-left-color: var(--baja); }
+  .finding.informativa { border-left-color: var(--informativa); }
+  .finding h3 { margin: 0 0 6px; font-size: 17px; }
+  .rec { background: #eef7ee; border-left: 3px solid var(--baja); padding: 8px 12px; border-radius: 6px; font-size: 14px; margin-top: 8px; }
+  details { margin-top: 8px; } summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+  pre { background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 8px; overflow-x: auto; font-size: 12px; }
+  footer { margin-top: 48px; color: var(--muted); font-size: 12px; border-top: 1px solid #ddd; padding-top: 16px; }
+  .ref { font-size: 12px; color: var(--muted); font-style: italic; }
+  @media print { body { background: #fff; } .card, table, .finding { box-shadow: none; } }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <h1>Informe de Auditoría de Seguridad</h1>
+    <div class="meta">
+      Tenant: <strong>{{ report.domain }}</strong> ·
+      Modo: <strong>{{ report.mode }}</strong> ·
+      Fecha: {{ report.generated_at | fmt_dt }} ·
+      Herramienta: workspace-tenant-auditor v{{ report.tool_version }}
+    </div>
+  </header>
+
+  <section>
+    <h2>Resumen ejecutivo</h2>
+    <div class="cards">
+      <div class="card"><div class="score" style="color: {{ '#b71c1c' if score < 50 else ('#f9a825' if score < 80 else '#2e7d32') }}">{{ score }}</div><div class="lbl">Postura / 100</div></div>
+      <div class="card"><div class="num">{{ report.total_checks }}</div><div class="lbl">Checks ejecutados</div></div>
+      <div class="card"><div class="num">{{ report.total_findings }}</div><div class="lbl">Hallazgos</div></div>
+      {% for sev in ['critica','alta','media','baja','informativa'] %}
+      <div class="card"><div class="num" style="color: var(--{{ sev }})">{{ counts[sev] }}</div><div class="lbl">{{ sev }}</div></div>
+      {% endfor %}
+    </div>
+
+    <p>
+      Se han ejecutado <strong>{{ report.total_checks }}</strong> comprobaciones sobre el tenant
+      <strong>{{ report.domain }}</strong>, detectando <strong>{{ report.total_findings }}</strong>
+      hallazgos. {% if counts.critica or counts.alta %}Se recomienda atender con prioridad los
+      hallazgos de severidad <strong>crítica</strong> y <strong>alta</strong› antes de cualquier
+      otro trabajo.{% else %}No se han detectado hallazgos de severidad crítica o alta.{% endif %}
+    </p>
+
+    <!-- Gráfica de barras en CSS: se renderiza también en PDF (WeasyPrint no ejecuta JS). -->
+    <div>
+      {% set maxc = [counts.critica, counts.alta, counts.media, counts.baja, counts.informativa, 1] | max %}
+      {% for sev, val in [('critica', counts.critica), ('alta', counts.alta), ('media', counts.media), ('baja', counts.baja), ('informativa', counts.informativa)] %}
+      <div class="bar-row">
+        <span class="bar-label">{{ sev }}</span>
+        <span class="bar-track"><span class="bar-fill" style="width: {{ (val / maxc * 100) | round(0) }}%; background: var(--{{ sev }})"></span></span>
+        <span>{{ val }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section>
+    <h2>Tabla de hallazgos por severidad</h2>
+    <table>
+      <thead><tr><th>Severidad</th><th>Check</th><th>Descripción</th><th>Afectados</th><th>Referencia</th></tr></thead>
+      <tbody>
+      {% for sev in ['critica','alta','media','baja','informativa'] %}
+        {% for f in findings_by_severity[sev] %}
+        <tr>
+          <td><span class="sev {{ f.severity.value }}">{{ f.severity.value }}</span></td>
+          <td>{{ f.check_name }}</td>
+          <td>{{ f.description }}</td>
+          <td style="text-align:center">{{ f.affected_count }}</td>
+          <td class="ref">{{ f.reference }}</td>
+        </tr>
+        {% endfor %}
+      {% endfor %}
+      {% if report.total_findings == 0 %}
+        <tr><td colspan="5" style="text-align:center; color:#2e7d32">Sin hallazgos. El tenant cumple todas las comprobaciones. ✅</td></tr>
+      {% endif %}
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Detalle por hallazgo</h2>
+    {% for f in report.findings | sort(attribute='severity.weight', reverse=true) %}
+    <div class="finding {{ f.severity.value }}">
+      <h3>{{ f.check_name }}
+        <span class="sev {{ f.severity.value }}">{{ f.severity.value }}</span>
+      </h3>
+      <p>{{ f.description }}</p>
+      <div class="rec"><strong>Recomendación:</strong> {{ f.recommendation }}</div>
+      <p class="ref">Referencia: {{ f.reference }} · Elementos afectados: {{ f.affected_count }}</p>
+      {% if f.evidence %}
+      <details>
+        <summary>Ver evidencia ({{ f.evidence | length }} elemento/s)</summary>
+        <pre>{{ f.evidence | tojson(indent=2) }}</pre>
+      </details>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </section>
+
+  {% if report.execution_errors %}
+  <section>
+    <h2>Avisos de ejecución</h2>
+    <ul>{% for e in report.execution_errors %}<li class="ref">{{ e }}</li>{% endfor %}</ul>
+  </section>
+  {% endif %}
+
+  <footer>
+    Generado por <strong>workspace-tenant-auditor</strong> v{{ report.tool_version }} ·
+    {{ generated_at | fmt_dt }}.
+    Este informe se basa en la configuración observable vía APIs de administración.
+    No sustituye una revisión de seguridad completa ni una auditoría de cumplimiento formal.
+  </footer>
+</div>
+
+<!-- Chart.js embebido de forma opcional: gráfica de donut. Si no hay red, la
+     sección de barras en CSS ya cubre la visualización en HTML y PDF. -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    var el = document.getElementById('sevChart');
+    if (!el || typeof Chart === 'undefined') return;
+    new Chart(el, {
+      type: 'doughnut',
+      data: {
+        labels: ['Crítica','Alta','Media','Baja','Informativa'],
+        datasets: [{
+          data: [{{ counts.critica }},{{ counts.alta }},{{ counts.media }},{{ counts.baja }},{{ counts.informativa }}],
+          backgroundColor: ['#b71c1c','#e65100','#f9a825','#2e7d32','#1565c0']
+        }]
+      },
+      options: { plugins: { legend: { position: 'bottom' } } }
+    });
+  });
+</script>
+<div style="max-width:360px;margin:0 auto;"><canvas id="sevChart"></canvas></div>
+
+</body>
+</html>

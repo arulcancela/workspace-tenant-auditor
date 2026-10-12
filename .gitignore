@@ -1,0 +1,39 @@
+# Entornos y cachés Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# Pytest / coverage
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Ruff / mypy
+.ruff_cache/
+.mypy_cache/
+
+# Secretos y entorno
+.env
+*.json
+!examples/**/*.json
+service-account*.json
+credentials*.json
+
+# Informes generados
+reports/
+*.pdf
+
+# Editores
+.vscode/
+.idea/
+*.swp
+
+# SO
+.DS_Store

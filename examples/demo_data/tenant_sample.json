@@ -1,0 +1,112 @@
+{
+  "domain": "ejemplo.com",
+  "users": [
+    {
+      "primaryEmail": "becario@ejemplo.com",
+      "isEnrolledIn2Sv": false,
+      "isEnforcedIn2Sv": false,
+      "suspended": false,
+      "lastLoginTime": "2024-06-01T09:00:00Z",
+      "orgUnitPath": "/Becarios",
+      "passwordLastChanged": "2024-01-01T09:00:00Z"
+    },
+    {
+      "primaryEmail": "antiguo.empleado@ejemplo.com",
+      "isEnrolledIn2Sv": false,
+      "suspended": false,
+      "lastLoginTime": "2024-02-01T09:00:00Z",
+      "orgUnitPath": "/"
+    },
+    {
+      "primaryEmail": "contabilidad@ejemplo.com",
+      "isEnrolledIn2Sv": true,
+      "suspended": false,
+      "lastLoginTime": "2024-06-10T09:00:00Z",
+      "orgUnitPath": "/Finanzas",
+      "passwordLastChanged": "2023-05-01T09:00:00Z"
+    },
+    {
+      "primaryEmail": "ventas@ejemplo.com",
+      "isEnrolledIn2Sv": true,
+      "suspended": false,
+      "lastLoginTime": "2024-06-09T09:00:00Z",
+      "orgUnitPath": "/Ventas",
+      "forwardingAddress": "externo@competidor.com"
+    },
+    {
+      "primaryEmail": "cto@ejemplo.com",
+      "isEnrolledIn2Sv": true,
+      "isEnforcedIn2Sv": true,
+      "suspended": false,
+      "lastLoginTime": "2024-06-12T09:00:00Z",
+      "orgUnitPath": "/Direccion",
+      "passwordLastChanged": "2024-05-12T09:00:00Z"
+    },
+    {
+      "primaryEmail": "superadmin1@ejemplo.com",
+      "isEnrolledIn2Sv": false,
+      "isEnforcedIn2Sv": false,
+      "suspended": false,
+      "lastLoginTime": "2024-06-11T09:00:00Z",
+      "orgUnitPath": "/Direccion"
+    }
+  ],
+  "groups": [
+    {
+      "email": "todos@ejemplo.com",
+      "name": "Todos",
+      "_members": [
+        {"email": "cto@ejemplo.com"},
+        {"email": "ventas@ejemplo.com"},
+        {"email": "contacto@proveedor-externo.com"}
+      ]
+    },
+    {
+      "email": "finanzas@ejemplo.com",
+      "name": "Finanzas",
+      "_members": [
+        {"email": "contabilidad@ejemplo.com"},
+        {"email": "auditor@consultora-externa.com"}
+      ]
+    }
+  ],
+  "domains": [
+    {"domainName": "ejemplo.com", "isPrimary": true, "verified": true},
+    {"domainName": "marca-alternativa.com", "isPrimary": false, "verified": false}
+  ],
+  "super_admins": [
+    {"primaryEmail": "superadmin1@ejemplo.com", "isEnrolledIn2Sv": false, "lastLoginTime": "2024-06-11T09:00:00Z"},
+    {"primaryEmail": "cto@ejemplo.com", "isEnrolledIn2Sv": true, "lastLoginTime": "2024-06-12T09:00:00Z"}
+  ],
+  "delegated_accounts": [
+    {"primaryEmail": "helpdesk@ejemplo.com", "scope": "gmail.readonly", "scope_count": 2},
+    {"primaryEmail": "integracion@ejemplo.com", "scope": "*", "scope_count": 12, "wildcard": true}
+  ],
+  "drive_policies": {
+    "sharing_default": "public",
+    "raw": {"allowExternalSharing": true}
+  },
+  "oauth_tokens": [
+    {
+      "client_id": "1234567890.apps.googleusercontent.com",
+      "userKey": "ventas@ejemplo.com",
+      "scopes": ["https://mail.google.com/", "https://www.googleapis.com/auth/drive"]
+    },
+    {
+      "client_id": "99887766.apps.googleusercontent.com",
+      "userKey": "contabilidad@ejemplo.com",
+      "scopes": ["https://www.googleapis.com/auth/drive.readonly"]
+    }
+  ],
+  "aliases": [
+    {"primaryEmail": "info@ejemplo.com", "alias": "ventas@ejemplo.com"}
+  ],
+  "vault_config": {
+    "enabled": true,
+    "retention_policies": [],
+    "retention_days": null
+  },
+  "login_activities": {
+    "ventas@ejemplo.com": "2024-06-09T09:00:00Z"
+  }
+}

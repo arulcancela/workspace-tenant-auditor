@@ -1,0 +1,16 @@
+# Ejecución reproducible con Docker.
+#   Modo demo (sin credenciales):   docker compose run --rm auditor audit --dry-run
+#   Modo real:  montar el JSON de la Service Account y un .env con las credenciales.
+services:
+  auditor:
+    build: .
+    image: workspace-tenant-auditor:latest
+    env_file:
+      - .env
+    volumes:
+      # Informes generados fuera del contenedor.
+      - ./reports:/app/reports
+      # Montar el JSON de la Service Account en solo lectura (modo real).
+      # - /etc/tenant-auditor/service-account.json:/secrets/sa.json:ro
+    # Por defecto, modo demo para que cualquiera pueda probarlo.
+    command: ["audit", "--dry-run", "--output", "/app/reports"]
