@@ -77,6 +77,13 @@ Rotar y revocar es tan importante como conceder. Si sospechas de una fuga:
   de avisos del informe: no asumas "sin hallazgos" si hubo errores de recogida.
 - La herramienta usa **solo lectura**; cualquier remediación es manual (o vía
   GAM / otra automatización) tras revisar el informe.
+- El check `oauth` se apoya en `directory.tokens().list()`, que expone las
+  **concesiones OAuth activas** (las que algún usuario ha autorizado). **No**
+  enumera apps instaladas por dominio que nadie ha usado todavía, por lo que
+  pueden existir apps sin hallazgo. Complementa con la Consola Admin
+  (Seguridad > Acceso a la API > Controles de aplicaciones) si necesitas el
+  catálogo completo. Esta lectura es la que exige el scope
+  `admin.directory.user.readonly`.
 
 ## Reportar una vulnerabilidad
 

@@ -18,8 +18,8 @@ flowchart TD
     end
 
     subgraph Recopilación
-        CREDS --> DIR[Directory API\nusuarios, grupos, dominios, admins]
-        CREDS --> REP[Reports API\nlogins, tokens OAuth]
+        CREDS --> DIR[Directory API\nusuarios, grupos, dominios, admins, aliases, tokens OAuth]
+        CREDS --> REP[Reports API\nlogins]
         DIR --> COLL[auth/collector.py]
         REP --> COLL
         COLL --> DATA[(TenantData)]
@@ -70,7 +70,17 @@ Service Account (JSON)  ──with_subject(superadmin)──▶  Credenciales co
 - Cada endpoint se envuelve en un helper `_safe(...)`. Si una API falla
   (p. ej. falta un scope), **el error se registra en `TenantData.errors`** y la
   recopilación continúa. Resultado: una auditoría **parcial pero útil**.
-- La paginación se centraliza en `_paginate()` (`nextPageToken`).
+- La paginación se centraliza en `_paginate(request_builder, response_key)`:
+  recorre `nextPageToken` y extrae los resultados de la clave correcta de cada
+  endpoint (`users`, `groups`, `members`, `domains`…), que la Directory API
+  devuelve bajo nombres distintos en cada caso.
+- Los **aliases de usuario** no tienen endpoint global en la Directory API: se
+  extraen del campo `aliases` de cada usuario (`projection=full`) y se aplanan a
+  una lista `[{primaryEmail, alias}]`.
+- Los **tokens OAuth** se leen con la Admin SDK Tokens API
+  (`directory.tokens().list(userKey=...)`), iterando usuario a usuario de forma
+  tolerante a fallos. Registran las **concesiones activas**, no el catálogo
+  completo de apps del tenant.
 - Producción: `TenantData` (contrato neutral, serializable y testeable).
 
 ### 3. Motor de checks (`checks/`)

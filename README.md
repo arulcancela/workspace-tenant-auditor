@@ -230,10 +230,14 @@ Detalle completo en **[ARCHITECTURE.md](ARCHITECTURE.md)**.
 ## Roadmap
 
 - [ ] Checks configurables por política externa (fichero YAML).
-- [ ] Integración con el endpoint `tokens` de la Reports API para apps OAuth completas.
+- [ ] Ampliar la recolección de apps OAuth a **todas** las aplicaciones del tenant (hoy se leen las concesiones activas por usuario vía `directory.tokens().list()`, no las apps sin uso).
 - [ ] Comparativa entre ejecuciones (drift detection) y tendencia de postura.
 - [ ] Exportación a CSV y a SARIF (para integrar en pipelines de seguridad).
 - [ ] Notificación por correo/Chat con el informe adjunto tras cada ejecución.
+
+## Changelog
+
+Los cambios relevantes del proyecto se documentan en [CHANGELOG.md](CHANGELOG.md).
 
 ## Licencia
 
