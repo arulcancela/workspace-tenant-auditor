@@ -28,18 +28,22 @@ from tenant_auditor.models import TenantData
 logger = logging.getLogger(__name__)
 
 
-def _paginate(request_builder) -> list[dict[str, Any]]:
+def _paginate(
+    request_builder,
+    response_key: str = "users",
+) -> list[dict[str, Any]]:
     """Itera todas las páginas de una petición paginada de Google APIs.
 
-    La Directory API devuelve resultados por páginas con `nextPageToken`.
-    Centralizar la paginación evita duplicar la lógica en cada endpoint.
+    Cada endpoint de la Directory API devuelve los resultados bajo una clave
+    distinta (``users``, ``groups``, ``members``, ``domains``…).
+    ``response_key`` indica cuál extraer en cada caso.
     """
     items: list[dict[str, Any]] = []
     page_token: str | None = None
     while True:
         request = request_builder(page_token)
         response = request.execute()
-        items.extend(response.get("items", response.get("users", [])))
+        items.extend(response.get(response_key, []))
         page_token = response.get("nextPageToken")
         if not page_token:
             break
@@ -65,7 +69,9 @@ def collect_tenant_data(config: ServiceAccountConfig, settings) -> TenantData:
     data.drive_policies = (
         _safe(lambda: _collect_drive_policies(directory), data, "drive_policies") or {}
     )
-    data.oauth_tokens = _safe(lambda: _collect_oauth_tokens(reports, config.domain), data, "oauth")
+    data.oauth_tokens = _safe(
+        lambda: _collect_oauth_tokens(directory, config.domain), data, "oauth"
+    )
     data.vault_config = {}
     data.login_activities = (
         _safe(lambda: _collect_login_activities(reports, config.domain), data, "login") or {}
@@ -99,7 +105,8 @@ def _collect_users(directory, domain: str) -> list[dict[str, Any]]:
             pageToken=page_token,
             projection="full",
             orderBy="email",
-        )
+        ),
+        response_key="users",
     )
 
 
@@ -108,7 +115,8 @@ def _collect_groups(directory, domain: str) -> list[dict[str, Any]]:
     groups = _paginate(
         lambda page_token: directory.groups().list(
             domain=domain, maxResults=200, pageToken=page_token
-        )
+        ),
+        response_key="groups",
     )
     # Enriquecer cada grupo con sus miembros para detectar externos.
     for group in groups:
@@ -117,7 +125,8 @@ def _collect_groups(directory, domain: str) -> list[dict[str, Any]]:
             members = _paginate(
                 lambda pt, e=email: directory.members().list(
                     groupKey=e, maxResults=200, pageToken=pt
-                )
+                ),
+                response_key="members",
             )
             group["_members"] = members
         except Exception as exc:  # noqa: BLE001
@@ -127,19 +136,37 @@ def _collect_groups(directory, domain: str) -> list[dict[str, Any]]:
 
 
 def _collect_domains(directory) -> list[dict[str, Any]]:
-    """Dominios (principal y secundarios/alias) del tenant."""
-    return _paginate(lambda page_token: directory.domains().list(customer="my_customer"))
+    """Dominios (principal y secundarios/alias) del tenant.
+
+    La API domains().list() no soporta paginación (devuelve todos en una
+    respuesta), pero usamos _paginate igualmente para mantener la
+    consistencia; el bucle terminará en la primera iteración.
+    """
+    return _paginate(
+        lambda page_token: directory.domains().list(customer="my_customer"),
+        response_key="domains",
+    )
 
 
 def _collect_aliases(directory, domain: str) -> list[dict[str, Any]]:
-    """Aliases a nivel de usuario (nicknames)."""
-    return _paginate(
-        lambda page_token: (
-            directory.users().aliases().list(userKey="all", pageToken=page_token)
-            if False  # placeholder: la API de aliases globales varía por tenant
-            else directory.users().list(domain=domain, projection="full", maxResults=500)
-        )
+    """Aliases de correo a nivel de usuario.
+
+    La Directory API no expone un endpoint global de aliases, así que se
+    extraen del campo ``aliases`` de cada usuario obtenido con projection=full.
+    Devuelve una lista de dicts con las claves ``primaryEmail`` y ``alias``.
+    """
+    users = _paginate(
+        lambda page_token: directory.users().list(
+            domain=domain, projection="full", maxResults=500, pageToken=page_token
+        ),
+        response_key="users",
     )
+    aliases: list[dict[str, Any]] = []
+    for user in users:
+        email = user.get("primaryEmail", "")
+        for alias in user.get("aliases", []):
+            aliases.append({"primaryEmail": email, "alias": alias})
+    return aliases
 
 
 def _collect_super_admins(directory, domain: str) -> list[dict[str, Any]]:
@@ -147,22 +174,27 @@ def _collect_super_admins(directory, domain: str) -> list[dict[str, Any]]:
     return _paginate(
         lambda page_token: directory.users().list(
             domain=domain, maxResults=100, pageToken=page_token, query="isAdmin=true"
-        )
+        ),
+        response_key="users",
     )
 
 
 def _collect_delegated(directory, domain: str) -> list[dict[str, Any]]:
-    """Cuentas con delegación de buzón (acceso delegado).
+    """Cuentas con delegación de dominio (Domain-Wide Delegation).
 
-    Nota: la Directory API no expone directamente la delegación de Gmail;
-    en producción se combina con la Reports API o GAM. Aquí dejamos el punto
-    de extensión documentado y devolvemos lo disponible.
+    Limitación conocida: la Directory API no expone directamente la
+    delegación de buzón de Gmail. Para obtener delegaciones de buzón reales
+    se necesitaría la Gmail API (``users.settings.delegates.list()``) o GAM.
+    Aquí consultamos los usuarios con projection=full como punto de partida;
+    los campos de delegación (``scope``, ``wildcard``) se esperan enriquecidos
+    externamente o desde los datos de demo.
     """
     try:
         return _paginate(
             lambda page_token: directory.users().list(
                 domain=domain, maxResults=100, pageToken=page_token, projection="full"
-            )
+            ),
+            response_key="users",
         )
     except Exception:  # noqa: BLE001
         return []
@@ -177,29 +209,32 @@ def _collect_drive_policies(directory) -> dict[str, Any]:
     return {"sharing_default": "unknown", "raw": {}}
 
 
-def _collect_oauth_tokens(reports, domain: str) -> list[dict[str, Any]]:
+def _collect_oauth_tokens(directory, domain: str) -> list[dict[str, Any]]:
     """Tokens OAuth de aplicaciones de terceros concedidos por los usuarios.
 
-    Se usa la Reports API (endpoint `tokens`), que expone las concesiones
-    activas y sus scopes.
+    Se usa la Admin SDK Tokens API (``directory.tokens().list()``), que expone
+    las concesiones OAuth activas por usuario junto con sus scopes y client IDs.
+    Se itera sobre los usuarios del dominio y se recopilan los tokens de cada
+    uno, de forma tolerante (un fallo en un usuario no detiene el proceso).
     """
+    users = _paginate(
+        lambda page_token: directory.users().list(
+            domain=domain, maxResults=500, pageToken=page_token, projection="basic"
+        ),
+        response_key="users",
+    )
     tokens: list[dict[str, Any]] = []
-    page_token: str | None = None
-    while True:
-        response = (
-            reports.userUsageReport()
-            .get(
-                userKey="all",
-                date=_today(),
-                parameters="accounts:authorized_apps",
-                pageToken=page_token,
-            )
-            .execute()
-        )
-        tokens.extend(response.get("usageReports", []))
-        page_token = response.get("nextPageToken")
-        if not page_token:
-            break
+    for user in users:
+        user_key = user.get("primaryEmail", "")
+        if not user_key:
+            continue
+        try:
+            response = directory.tokens().list(userKey=user_key).execute()
+            for token in response.get("items", []):
+                token["userKey"] = user_key
+                tokens.append(token)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("No se pudieron leer tokens OAuth de %s: %s", user_key, exc)
     return tokens
 
 

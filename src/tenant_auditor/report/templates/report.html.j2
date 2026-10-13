@@ -77,7 +77,7 @@
       Se han ejecutado <strong>{{ report.total_checks }}</strong> comprobaciones sobre el tenant
       <strong>{{ report.domain }}</strong>, detectando <strong>{{ report.total_findings }}</strong>
       hallazgos. {% if counts.critica or counts.alta %}Se recomienda atender con prioridad los
-      hallazgos de severidad <strong>crítica</strong> y <strong>alta</strong› antes de cualquier
+      hallazgos de severidad <strong>crítica</strong> y <strong>alta</strong> antes de cualquier
       otro trabajo.{% else %}No se han detectado hallazgos de severidad crítica o alta.{% endif %}
     </p>
 
@@ -150,10 +150,12 @@
     Este informe se basa en la configuración observable vía APIs de administración.
     No sustituye una revisión de seguridad completa ni una auditoría de cumplimiento formal.
   </footer>
+  <!-- Chart.js embebido de forma opcional: gráfica de donut. Si no hay red, la
+       sección de barras en CSS ya cubre la visualización en HTML y PDF. -->
+  <div style="max-width:360px;margin:32px auto 0;"><canvas id="sevChart"></canvas></div>
+
 </div>
 
-<!-- Chart.js embebido de forma opcional: gráfica de donut. Si no hay red, la
-     sección de barras en CSS ya cubre la visualización en HTML y PDF. -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
   document.addEventListener('DOMContentLoaded', function () {
@@ -172,7 +174,6 @@
     });
   });
 </script>
-<div style="max-width:360px;margin:0 auto;"><canvas id="sevChart"></canvas></div>
 
 </body>
 </html>
