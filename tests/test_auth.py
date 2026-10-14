@@ -13,9 +13,11 @@ import pytest
 
 from tenant_auditor.auth.google_client import (
     AuthError,
+    ServiceAccountConfig,
     build_service_account_config,
     clear_client_cache,
     get_directory_service,
+    get_reports_service,
 )
 from tenant_auditor.config import Settings
 
@@ -112,3 +114,54 @@ def test_fichero_inexistente_lanza_autherror(mock_from_file) -> None:
     config = build_service_account_config(settings)
     with pytest.raises(AuthError, match="No se encontró"):
         get_directory_service(config)
+
+
+def _config_de_prueba() -> ServiceAccountConfig:
+    settings = Settings(
+        tenant_domain="ejemplo.com",
+        google_application_credentials="/tmp/sa.json",
+        delegated_admin_email="admin@ejemplo.com",
+    )
+    return build_service_account_config(settings)
+
+
+@patch("tenant_auditor.auth.google_client.build")
+@patch("tenant_auditor.auth.google_client.service_account.Credentials.from_service_account_file")
+def test_reports_service_usa_admin_reports_v1(mock_from_file, mock_build) -> None:
+    """Regresión: la Reports API debe construirse como ``admin:reports_v1``.
+
+    Antes se usaba ``build("reports", "v1")``, que devuelve
+    ``UnknownApiNameOrVersion`` (HTTP 404 en el discovery) y abortaba la
+    auditoría real con un falso "error de autenticación" (código de salida 3).
+    La Reports API de Google Workspace se consume a través del cliente del
+    Admin SDK: ``build("admin", "reports_v1")``.
+    """
+    creds = MagicMock()
+    creds.with_subject.return_value = MagicMock()
+    mock_from_file.return_value = creds
+    mock_build.return_value = MagicMock()
+
+    get_reports_service(_config_de_prueba())
+
+    mock_build.assert_called_once()
+    api, version = mock_build.call_args.args[:2]
+    assert (api, version) == ("admin", "reports_v1"), (
+        "La Reports API debe construirse como ('admin', 'reports_v1'); "
+        f"se usó ('{api}', '{version}')."
+    )
+
+
+@patch("tenant_auditor.auth.google_client.build")
+@patch("tenant_auditor.auth.google_client.service_account.Credentials.from_service_account_file")
+def test_directory_service_usa_admin_directory_v1(mock_from_file, mock_build) -> None:
+    """Regresión: la Directory API debe construirse como ``admin:directory_v1``."""
+    creds = MagicMock()
+    creds.with_subject.return_value = MagicMock()
+    mock_from_file.return_value = creds
+    mock_build.return_value = MagicMock()
+
+    get_directory_service(_config_de_prueba())
+
+    mock_build.assert_called_once()
+    api, version = mock_build.call_args.args[:2]
+    assert (api, version) == ("admin", "directory_v1")
