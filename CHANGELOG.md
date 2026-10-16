@@ -31,10 +31,19 @@ y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
   Workspace se consume a través del cliente del Admin SDK, por lo que ahora se
   construye como `build("admin", "reports_v1")`. Verificado en un tenant real
   (Service Account + Domain-Wide Delegation).
+- **La construcción del cliente de Reports ya no aborta la auditoría**
+  (`auth/collector.py`): dicho cliente se creaba fuera del bloque tolerante a
+  fallos (`_safe`), de modo que cualquier problema al construirlo —como el bug
+  anterior de `reports:v1`— tumbaba la auditoría completa con código de salida
+  `3`. Ahora se construye dentro de `_safe`: si falla, se registra como aviso no
+  fatal en `execution_errors` y la auditoría continúa con el resto de checks
+  (los de login/inactividad quedan sin datos, pero el informe se genera). El
+  cliente de Directory sigue siendo imprescindible y, si falla, se propaga un
+  `AuthError` con mensaje accionable.
 
 ### Notas
 
-- Verificación: 62/62 tests ✅ · `ruff` limpio ✅ · `tenant-auditor audit --dry-run` ✅
+- Verificación: 64/64 tests ✅ · `ruff` limpio ✅ · `tenant-auditor audit --dry-run` ✅
   · auditoría real end-to-end contra un tenant de Google Workspace ✅.
 
 ## [1.0.0] - versión inicial

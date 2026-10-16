@@ -165,3 +165,55 @@ def test_directory_service_usa_admin_directory_v1(mock_from_file, mock_build) ->
     mock_build.assert_called_once()
     api, version = mock_build.call_args.args[:2]
     assert (api, version) == ("admin", "directory_v1")
+
+
+@patch("tenant_auditor.auth.collector._collect_login_activities")
+@patch("tenant_auditor.auth.collector._collect_oauth_tokens")
+@patch("tenant_auditor.auth.collector._collect_super_admins")
+@patch("tenant_auditor.auth.collector._collect_aliases")
+@patch("tenant_auditor.auth.collector._collect_domains")
+@patch("tenant_auditor.auth.collector._collect_groups")
+@patch("tenant_auditor.auth.collector._collect_users")
+@patch("tenant_auditor.auth.collector.get_reports_service")
+@patch("tenant_auditor.auth.collector.get_directory_service")
+def test_fallo_de_reports_no_aborta_la_recopilacion(
+    mock_dir, mock_reports, mock_users, mock_groups, mock_domains,
+    mock_aliases, mock_admins, mock_oauth, mock_login,
+) -> None:
+    """Regresión de robustez: un fallo al construir el cliente de Reports NO
+    debe abortar la auditoría.
+
+    Antes, `get_reports_service()` se llamaba fuera del bloque `_safe`, de modo
+    que cualquier error al construir el cliente (p.ej. el bug de `reports:v1`)
+    propagaba `AuthError` y tumbaba toda la auditoría. Ahora es opcional: si
+    falla, se registra como aviso no fatal en `TenantData.errors` y la
+    recopilación continúa.
+    """
+    from tenant_auditor.auth.collector import collect_tenant_data
+
+    mock_dir.return_value = MagicMock()
+    mock_reports.side_effect = AuthError("No se pudo construir el cliente admin:reports_v1")
+    # El resto de la recopilación devuelve vacío (evitamos red y paginación).
+    for m in (mock_users, mock_groups, mock_domains, mock_aliases, mock_admins, mock_oauth):
+        m.return_value = []
+
+    config = _config_de_prueba()
+    data = collect_tenant_data(config, settings=None)
+
+    assert any("reports_client" in e for e in data.errors), data.errors
+    assert data.login_activities == {}
+    # La auditoría sigue teniendo datos (estructura válida) pese al fallo.
+    assert data.domain == "ejemplo.com"
+
+
+@patch("tenant_auditor.auth.collector.get_reports_service")
+@patch("tenant_auditor.auth.collector.get_directory_service")
+def test_fallo_de_directory_si_propaga_error(mock_dir, mock_reports) -> None:
+    """El cliente de Directory es imprescindible: si falla, debe propagarse."""
+    from tenant_auditor.auth.collector import collect_tenant_data
+
+    mock_dir.side_effect = AuthError("No se pudo construir el cliente admin:directory_v1")
+
+    config = _config_de_prueba()
+    with pytest.raises(AuthError, match="directory_v1"):
+        collect_tenant_data(config, settings=None)
