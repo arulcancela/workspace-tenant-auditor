@@ -13,9 +13,11 @@ import pytest
 
 from tenant_auditor.auth.google_client import (
     AuthError,
+    ServiceAccountConfig,
     build_service_account_config,
     clear_client_cache,
     get_directory_service,
+    get_reports_service,
 )
 from tenant_auditor.config import Settings
 
@@ -112,3 +114,106 @@ def test_fichero_inexistente_lanza_autherror(mock_from_file) -> None:
     config = build_service_account_config(settings)
     with pytest.raises(AuthError, match="No se encontró"):
         get_directory_service(config)
+
+
+def _config_de_prueba() -> ServiceAccountConfig:
+    settings = Settings(
+        tenant_domain="ejemplo.com",
+        google_application_credentials="/tmp/sa.json",
+        delegated_admin_email="admin@ejemplo.com",
+    )
+    return build_service_account_config(settings)
+
+
+@patch("tenant_auditor.auth.google_client.build")
+@patch("tenant_auditor.auth.google_client.service_account.Credentials.from_service_account_file")
+def test_reports_service_usa_admin_reports_v1(mock_from_file, mock_build) -> None:
+    """Regresión: la Reports API debe construirse como ``admin:reports_v1``.
+
+    Antes se usaba ``build("reports", "v1")``, que devuelve
+    ``UnknownApiNameOrVersion`` (HTTP 404 en el discovery) y abortaba la
+    auditoría real con un falso "error de autenticación" (código de salida 3).
+    La Reports API de Google Workspace se consume a través del cliente del
+    Admin SDK: ``build("admin", "reports_v1")``.
+    """
+    creds = MagicMock()
+    creds.with_subject.return_value = MagicMock()
+    mock_from_file.return_value = creds
+    mock_build.return_value = MagicMock()
+
+    get_reports_service(_config_de_prueba())
+
+    mock_build.assert_called_once()
+    api, version = mock_build.call_args.args[:2]
+    assert (api, version) == ("admin", "reports_v1"), (
+        "La Reports API debe construirse como ('admin', 'reports_v1'); "
+        f"se usó ('{api}', '{version}')."
+    )
+
+
+@patch("tenant_auditor.auth.google_client.build")
+@patch("tenant_auditor.auth.google_client.service_account.Credentials.from_service_account_file")
+def test_directory_service_usa_admin_directory_v1(mock_from_file, mock_build) -> None:
+    """Regresión: la Directory API debe construirse como ``admin:directory_v1``."""
+    creds = MagicMock()
+    creds.with_subject.return_value = MagicMock()
+    mock_from_file.return_value = creds
+    mock_build.return_value = MagicMock()
+
+    get_directory_service(_config_de_prueba())
+
+    mock_build.assert_called_once()
+    api, version = mock_build.call_args.args[:2]
+    assert (api, version) == ("admin", "directory_v1")
+
+
+@patch("tenant_auditor.auth.collector._collect_login_activities")
+@patch("tenant_auditor.auth.collector._collect_oauth_tokens")
+@patch("tenant_auditor.auth.collector._collect_super_admins")
+@patch("tenant_auditor.auth.collector._collect_aliases")
+@patch("tenant_auditor.auth.collector._collect_domains")
+@patch("tenant_auditor.auth.collector._collect_groups")
+@patch("tenant_auditor.auth.collector._collect_users")
+@patch("tenant_auditor.auth.collector.get_reports_service")
+@patch("tenant_auditor.auth.collector.get_directory_service")
+def test_fallo_de_reports_no_aborta_la_recopilacion(
+    mock_dir, mock_reports, mock_users, mock_groups, mock_domains,
+    mock_aliases, mock_admins, mock_oauth, mock_login,
+) -> None:
+    """Regresión de robustez: un fallo al construir el cliente de Reports NO
+    debe abortar la auditoría.
+
+    Antes, `get_reports_service()` se llamaba fuera del bloque `_safe`, de modo
+    que cualquier error al construir el cliente (p.ej. el bug de `reports:v1`)
+    propagaba `AuthError` y tumbaba toda la auditoría. Ahora es opcional: si
+    falla, se registra como aviso no fatal en `TenantData.errors` y la
+    recopilación continúa.
+    """
+    from tenant_auditor.auth.collector import collect_tenant_data
+
+    mock_dir.return_value = MagicMock()
+    mock_reports.side_effect = AuthError("No se pudo construir el cliente admin:reports_v1")
+    # El resto de la recopilación devuelve vacío (evitamos red y paginación).
+    for m in (mock_users, mock_groups, mock_domains, mock_aliases, mock_admins, mock_oauth):
+        m.return_value = []
+
+    config = _config_de_prueba()
+    data = collect_tenant_data(config, settings=None)
+
+    assert any("reports_client" in e for e in data.errors), data.errors
+    assert data.login_activities == {}
+    # La auditoría sigue teniendo datos (estructura válida) pese al fallo.
+    assert data.domain == "ejemplo.com"
+
+
+@patch("tenant_auditor.auth.collector.get_reports_service")
+@patch("tenant_auditor.auth.collector.get_directory_service")
+def test_fallo_de_directory_si_propaga_error(mock_dir, mock_reports) -> None:
+    """El cliente de Directory es imprescindible: si falla, debe propagarse."""
+    from tenant_auditor.auth.collector import collect_tenant_data
+
+    mock_dir.side_effect = AuthError("No se pudo construir el cliente admin:directory_v1")
+
+    config = _config_de_prueba()
+    with pytest.raises(AuthError, match="directory_v1"):
+        collect_tenant_data(config, settings=None)

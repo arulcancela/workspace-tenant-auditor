@@ -53,8 +53,15 @@ def _paginate(
 def collect_tenant_data(config: ServiceAccountConfig, settings) -> TenantData:
     """Punto de entrada: recopila toda la información necesaria del tenant."""
     data = TenantData(domain=config.domain)
+
+    # El cliente de Directory es imprescindible para casi todos los checks; si
+    # falla, dejamos que AuthError suba para dar un mensaje claro al operador.
     directory = get_directory_service(config)
-    reports = get_reports_service(config)
+
+    # El cliente de Reports es opcional: si no se puede construir (p.ej. API no
+    # habilitada o scope ausente), lo tratamos como error no fatal y seguimos,
+    # de modo que la auditoría no se aborta por una sola API.
+    reports = _safe(lambda: get_reports_service(config), data, "reports_client")
 
     data.users = _safe(lambda: _collect_users(directory, config.domain), data, "users")
     data.groups = _safe(lambda: _collect_groups(directory, config.domain), data, "groups")
@@ -73,9 +80,12 @@ def collect_tenant_data(config: ServiceAccountConfig, settings) -> TenantData:
         lambda: _collect_oauth_tokens(directory, config.domain), data, "oauth"
     )
     data.vault_config = {}
-    data.login_activities = (
-        _safe(lambda: _collect_login_activities(reports, config.domain), data, "login") or {}
-    )
+    if reports is not None:
+        data.login_activities = (
+            _safe(lambda: _collect_login_activities(reports, config.domain), data, "login") or {}
+        )
+    else:
+        data.login_activities = {}
 
     return data
 

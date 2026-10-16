@@ -23,10 +23,28 @@ y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 - **Template HTML** (`report/templates/report.html.j2`): corregido carácter
   malformado `</strong›` → `</strong>` y movido el `<canvas>` de Chart.js
   dentro del layout para que no rompa la estructura del informe.
+- **Cliente de la Reports API construido con un nombre de API inválido**
+  (`auth/google_client.py`): `get_reports_service()` llamaba a
+  `build("reports", "v1")`, que devuelve `UnknownApiNameOrVersion` (HTTP 404 en
+  el endpoint de discovery) y hacía que la auditoría real abortara con un falso
+  «error de autenticación» (código de salida `3`). La Reports API de Google
+  Workspace se consume a través del cliente del Admin SDK, por lo que ahora se
+  construye como `build("admin", "reports_v1")`. Verificado en un tenant real
+  (Service Account + Domain-Wide Delegation).
+- **La construcción del cliente de Reports ya no aborta la auditoría**
+  (`auth/collector.py`): dicho cliente se creaba fuera del bloque tolerante a
+  fallos (`_safe`), de modo que cualquier problema al construirlo —como el bug
+  anterior de `reports:v1`— tumbaba la auditoría completa con código de salida
+  `3`. Ahora se construye dentro de `_safe`: si falla, se registra como aviso no
+  fatal en `execution_errors` y la auditoría continúa con el resto de checks
+  (los de login/inactividad quedan sin datos, pero el informe se genera). El
+  cliente de Directory sigue siendo imprescindible y, si falla, se propaga un
+  `AuthError` con mensaje accionable.
 
 ### Notas
 
-- Verificación: 60/60 tests ✅ · `ruff` limpio ✅ · `tenant-auditor audit --dry-run` ✅.
+- Verificación: 64/64 tests ✅ · `ruff` limpio ✅ · `tenant-auditor audit --dry-run` ✅
+  · auditoría real end-to-end contra un tenant de Google Workspace ✅.
 
 ## [1.0.0] - versión inicial
 

@@ -88,7 +88,7 @@ def get_service(api: str, version: str, config: ServiceAccountConfig):
 
     Args:
         api: Nombre de la API, p.ej. "admin" o "reports".
-        version: Versión de la API, p.ej. "directory_v1" o "v1".
+        version: Versión de la API, p.ej. "directory_v1" o "reports_v1".
         config: Configuración de la Service Account.
     """
     cache_key = (f"{api}:{version}", config.delegated_admin_email)
@@ -112,8 +112,14 @@ def get_directory_service(config: ServiceAccountConfig):
 
 
 def get_reports_service(config: ServiceAccountConfig):
-    """Cliente de la Reports API (actividades de login, tokens OAuth)."""
-    return get_service("reports", "v1", config)
+    """Cliente de la Reports API (actividades de login, tokens OAuth).
+
+    Nota: la Reports API de Google Workspace NO es un servicio de discovery
+    independiente llamado "reports"; se consume a través del cliente del
+    Admin SDK como ``build("admin", "reports_v1")``. Usar ``build("reports",
+    "v1")`` provoca ``UnknownApiNameOrVersion`` (HTTP 404 en el discovery).
+    """
+    return get_service("admin", "reports_v1", config)
 
 
 def clear_client_cache() -> None:
