@@ -167,6 +167,7 @@ def test_directory_service_usa_admin_directory_v1(mock_from_file, mock_build) ->
     assert (api, version) == ("admin", "directory_v1")
 
 
+@patch("tenant_auditor.auth.collector._collect_delegated")
 @patch("tenant_auditor.auth.collector._collect_login_activities")
 @patch("tenant_auditor.auth.collector._collect_oauth_tokens")
 @patch("tenant_auditor.auth.collector._collect_super_admins")
@@ -177,8 +178,16 @@ def test_directory_service_usa_admin_directory_v1(mock_from_file, mock_build) ->
 @patch("tenant_auditor.auth.collector.get_reports_service")
 @patch("tenant_auditor.auth.collector.get_directory_service")
 def test_fallo_de_reports_no_aborta_la_recopilacion(
-    mock_dir, mock_reports, mock_users, mock_groups, mock_domains,
-    mock_aliases, mock_admins, mock_oauth, mock_login,
+    mock_dir,
+    mock_reports,
+    mock_users,
+    mock_groups,
+    mock_domains,
+    mock_aliases,
+    mock_admins,
+    mock_oauth,
+    mock_login,
+    mock_delegated,
 ) -> None:
     """Regresión de robustez: un fallo al construir el cliente de Reports NO
     debe abortar la auditoría.
@@ -191,10 +200,25 @@ def test_fallo_de_reports_no_aborta_la_recopilacion(
     """
     from tenant_auditor.auth.collector import collect_tenant_data
 
-    mock_dir.return_value = MagicMock()
+    mock_directory = MagicMock()
+    mock_directory.users.return_value.list.return_value.execute.return_value = {"users": []}
+    mock_directory.groups.return_value.list.return_value.execute.return_value = {"groups": []}
+    mock_directory.domains.return_value.list.return_value.execute.return_value = {"domains": []}
+    mock_directory.members.return_value.list.return_value.execute.return_value = {"members": []}
+    mock_directory.tokens.return_value.list.return_value.execute.return_value = {"items": []}
+    mock_dir.return_value = mock_directory
+
     mock_reports.side_effect = AuthError("No se pudo construir el cliente admin:reports_v1")
     # El resto de la recopilación devuelve vacío (evitamos red y paginación).
-    for m in (mock_users, mock_groups, mock_domains, mock_aliases, mock_admins, mock_oauth):
+    for m in (
+        mock_users,
+        mock_groups,
+        mock_domains,
+        mock_aliases,
+        mock_admins,
+        mock_delegated,
+        mock_oauth,
+    ):
         m.return_value = []
 
     config = _config_de_prueba()
