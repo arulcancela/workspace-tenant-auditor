@@ -4,6 +4,15 @@ Todas las modificaciones relevantes de este proyecto se documentan en este
 archivo. El formato está basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/)
 y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
+## [1.1.2] - 2026-10-22
+
+### Corregido
+
+- **Detección del modo de instalación**: `origen` solo reconocía
+  `site-packages`/`dist-packages`, así que instalaciones con `--target`,
+  `--prefix` o un entorno gestionado (pipx) se reportaban como «código
+  fuente». Ahora también se detecta el `*.dist-info` contiguo al paquete.
+
 ## [1.1.1] - 2026-10-22
 
 ### Corregido

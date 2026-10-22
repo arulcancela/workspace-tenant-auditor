@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from tenant_auditor.diagnostics import BuildInfo, _short_commit, build_info
+from tenant_auditor.diagnostics import BuildInfo, _install_kind, _short_commit, build_info
 
 
 def test_build_info_declara_las_apis_reales() -> None:
@@ -79,3 +79,17 @@ def test_short_commit_tolera_metadatos_ausentes_o_no_vcs() -> None:
         _short_commit(json.dumps({"url": "file:///tmp/x", "dir_info": {"editable": True}})) is None
     )
     assert _short_commit(json.dumps({"vcs_info": {"commit_id": ""}})) is None
+
+
+def test_install_kind_detecta_paquete_fuera_de_site_packages(tmp_path) -> None:
+    """pip --target, pipx y --prefix no usan site-packages pero sí dist-info."""
+    pkg = tmp_path / "tenant_auditor"
+    pkg.mkdir()
+    (tmp_path / "workspace_tenant_auditor-1.1.2.dist-info").mkdir()
+    assert _install_kind(pkg) == "paquete instalado"
+
+
+def test_install_kind_detecta_checkout(tmp_path) -> None:
+    src = tmp_path / "src" / "tenant_auditor"
+    src.mkdir(parents=True)
+    assert _install_kind(src) == "código fuente"

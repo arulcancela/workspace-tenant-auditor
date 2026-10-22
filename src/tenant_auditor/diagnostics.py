@@ -90,9 +90,18 @@ def _find_git_root(start: Path) -> Path | None:
 
 
 def _install_kind(package_path: Path) -> str:
-    """Distingue una ejecución desde el código fuente de un paquete instalado."""
+    """Distingue una ejecución desde el código fuente de un paquete instalado.
+
+    Se comprueba el directorio contenedor además de ``site-packages`` porque
+    instalaciones con ``--target``, ``--prefix`` o gestores tipo pipx dejan el
+    paquete en rutas que no se llaman así, pero siempre con su ``*.dist-info``
+    al lado.
+    """
     parts = {part.lower() for part in package_path.parts}
     if "site-packages" in parts or "dist-packages" in parts:
+        return "paquete instalado"
+    parent = package_path.parent
+    if any(parent.glob("*.dist-info")) or any(parent.glob("*.egg-info")):
         return "paquete instalado"
     return "código fuente"
 
