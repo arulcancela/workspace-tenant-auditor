@@ -25,6 +25,7 @@ from tenant_auditor import __version__
 from tenant_auditor.checks import CHECKS, run_checks
 from tenant_auditor.checks.registry import resolve_check_ids
 from tenant_auditor.config import Settings, get_settings
+from tenant_auditor.diagnostics import build_info
 from tenant_auditor.models import AuditReport, TenantData
 
 app = typer.Typer(
@@ -46,10 +47,55 @@ def _setup_logging(level: str) -> None:
     )
 
 
+def _print_build_info() -> None:
+    """Imprime versión, procedencia del código y APIs en uso."""
+    info = build_info()
+    console.print(f"workspace-tenant-auditor [bold]v{info.version}[/bold]")
+
+    table = Table(show_header=False, box=None, padding=(0, 2))
+    table.add_column(style="cyan", no_wrap=True)
+    table.add_column()
+    table.add_row("build", info.short_id)
+    table.add_row("origen", info.install_kind)
+    table.add_row("paquete", str(info.package_path))
+    if info.package_date:
+        table.add_row("copia en disco", info.package_date)
+    table.add_row("Directory API", info.directory_api)
+    table.add_row("Reports API", info.reports_api)
+    console.print(table)
+
+    if info.version_mismatch:
+        console.print(
+            f"[yellow]Nota:[/yellow] los metadatos del entorno declaran v{info.installed_version} "
+            f"y el código en ejecución es v{info.version}. Suele indicar una instalación antigua: "
+            "revisa 'which -a tenant-auditor' y reinstala para refrescar los metadatos."
+        )
+
+
+@app.callback(invoke_without_command=True)
+def root(
+    ctx: typer.Context,
+    show_version: bool = typer.Option(
+        False,
+        "--version",
+        "-V",
+        is_eager=True,
+        help="Muestra versión e información de la build en ejecución.",
+    ),
+) -> None:
+    """Auditor de seguridad y cumplimiento para tenants de Google Workspace."""
+    if show_version:
+        _print_build_info()
+        raise typer.Exit()
+    if ctx.invoked_subcommand is None:
+        typer.echo(ctx.get_help())
+        raise typer.Exit()
+
+
 @app.command()
 def version() -> None:
-    """Muestra la versión de la herramienta."""
-    console.print(f"workspace-tenant-auditor [bold]v{__version__}[/bold]")
+    """Muestra versión, build y APIs en uso."""
+    _print_build_info()
 
 
 @app.command("list-checks")
@@ -101,8 +147,9 @@ def audit(
         console.print(f"[bold red]Error:[/bold red] {exc}")
         raise typer.Exit(code=2) from exc
 
+    info = build_info()
     console.print(
-        f"[bold]workspace-tenant-auditor[/bold] v{__version__} — "
+        f"[bold]workspace-tenant-auditor[/bold] v{info.version} ({info.short_id}) — "
         f"dominio [cyan]{resolved_domain}[/cyan] — "
         f"{'[yellow]MODO DEMO[/yellow]' if dry_run else 'modo real'}"
     )
@@ -149,12 +196,21 @@ def _collect(dry_run: bool, settings: Settings, domain: str) -> TenantData:
         return load_demo_data(domain)
 
     from tenant_auditor.auth.collector import collect_tenant_data
-    from tenant_auditor.auth.google_client import AuthError, build_service_account_config
+    from tenant_auditor.auth.google_client import (
+        AuthError,
+        ClientBuildError,
+        build_service_account_config,
+    )
 
     try:
         config = build_service_account_config(settings)
         with console.status("[bold green]Recopilando datos del tenant..."):
             return collect_tenant_data(config, settings)
+    except ClientBuildError as exc:
+        console.print(f"[bold red]Error al construir el cliente de la API:[/bold red] {exc}")
+        if exc.hint:
+            console.print(f"Sugerencia: {exc.hint}")
+        raise typer.Exit(code=4) from exc
     except AuthError as exc:
         console.print(f"[bold red]Error de autenticación:[/bold red] {exc}")
         console.print("Sugerencia: prueba con [cyan]--dry-run[/cyan] para usar datos de ejemplo.")

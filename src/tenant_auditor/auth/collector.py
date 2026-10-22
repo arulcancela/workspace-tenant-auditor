@@ -95,7 +95,10 @@ def _safe(fn, data: TenantData, label: str):  # noqa: ANN001
     try:
         return fn()
     except Exception as exc:  # noqa: BLE001 - queremos tolerancia total aquí
+        hint = getattr(exc, "hint", "")
         msg = f"Fallo recopilando '{label}': {exc}"
+        if hint:
+            msg = f"{msg} Sugerencia: {hint}"
         logger.warning(msg)
         data.errors.append(msg)
         return None

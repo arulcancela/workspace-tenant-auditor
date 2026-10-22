@@ -24,7 +24,9 @@ import logging
 
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
+from googleapiclient.errors import UnknownApiNameOrVersion
 
+from tenant_auditor.apis import DIRECTORY_API, REPORTS_API
 from tenant_auditor.config import Settings
 from tenant_auditor.models import ServiceAccountConfig
 
@@ -36,6 +38,63 @@ _CLIENT_CACHE: dict[tuple[str, str], object] = {}
 
 class AuthError(RuntimeError):
     """Error controlado durante la construcción de credenciales."""
+
+
+class ClientBuildError(RuntimeError):
+    """No se pudo construir el cliente de una API (discovery, red o nombre inválido).
+
+    Es deliberadamente distinto de :class:`AuthError`. Las credenciales pueden
+    ser perfectamente válidas y aun así fallar la construcción del cliente; al
+    confundir ambos casos, un error de discovery se presentaba al operador como
+    «Error de autenticación», que apunta a un sitio equivocado.
+
+    Attributes:
+        hint: Sugerencia accionable para resolver el problema.
+    """
+
+    def __init__(self, message: str, *, hint: str = "") -> None:
+        super().__init__(message)
+        self.hint = hint
+
+
+def _classify_build_failure(api: str, version: str, exc: Exception) -> tuple[str, str]:
+    """Traduce un fallo de ``build()`` a (causa legible, sugerencia accionable)."""
+    text = str(exc)
+    is_unknown_api = isinstance(exc, UnknownApiNameOrVersion) or (
+        type(exc).__name__ == "UnknownApiNameOrVersion"
+    )
+
+    if is_unknown_api:
+        if api == "reports" or version == "v1":
+            detail = "La Reports API se construye como admin:reports_v1."
+        else:
+            detail = f"Revisa el nombre {api}:{version}."
+        return (
+            f"el servicio de discovery no reconoce {api}:{version}",
+            "Ese nombre de API no existe o lo usa una versión antigua del paquete. "
+            f"{detail} Comprueba qué build ejecutas con 'tenant-auditor version'.",
+        )
+    if "accessNotConfigured" in text or "SERVICE_DISABLED" in text:
+        return (
+            "la API no está habilitada en el proyecto de Google Cloud",
+            "Habilita Admin SDK API en el proyecto de la Service Account "
+            "(API y servicios > Biblioteca).",
+        )
+    if "404" in text:
+        return (
+            "discovery no encuentra el documento de la API",
+            "Suele indicar una URL de discovery bloqueada por red o proxy, o un "
+            "nombre de API obsoleto. Revisa la salida hacia *.googleapis.com.",
+        )
+    if "timed out" in text.lower() or "Connection" in type(exc).__name__:
+        return (
+            "no se pudo contactar con el endpoint de discovery",
+            "Revisa la conectividad y el proxy de salida hacia *.googleapis.com.",
+        )
+    return (
+        "error inesperado al construir el cliente de la API",
+        "Revisa el detalle del error y la conectividad de la máquina.",
+    )
 
 
 def build_service_account_config(settings: Settings) -> ServiceAccountConfig:
@@ -99,7 +158,11 @@ def get_service(api: str, version: str, config: ServiceAccountConfig):
     try:
         service = build(api, version, credentials=credentials, cache_discovery=False)
     except Exception as exc:  # noqa: BLE001
-        raise AuthError(f"No se pudo construir el cliente {api}:{version}: {exc}") from exc
+        reason, hint = _classify_build_failure(api, version, exc)
+        raise ClientBuildError(
+            f"No se pudo construir el cliente {api}:{version} ({reason}): {exc}",
+            hint=hint,
+        ) from exc
 
     _CLIENT_CACHE[cache_key] = service
     logger.debug("Cliente %s:%s construido y cacheado", api, version)
@@ -108,7 +171,8 @@ def get_service(api: str, version: str, config: ServiceAccountConfig):
 
 def get_directory_service(config: ServiceAccountConfig):
     """Cliente de la Directory API (Admin SDK)."""
-    return get_service("admin", "directory_v1", config)
+    api, version = DIRECTORY_API
+    return get_service(api, version, config)
 
 
 def get_reports_service(config: ServiceAccountConfig):
@@ -119,7 +183,8 @@ def get_reports_service(config: ServiceAccountConfig):
     Admin SDK como ``build("admin", "reports_v1")``. Usar ``build("reports",
     "v1")`` provoca ``UnknownApiNameOrVersion`` (HTTP 404 en el discovery).
     """
-    return get_service("admin", "reports_v1", config)
+    api, version = REPORTS_API
+    return get_service(api, version, config)
 
 
 def clear_client_cache() -> None:

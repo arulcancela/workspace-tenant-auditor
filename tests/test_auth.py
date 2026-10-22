@@ -13,11 +13,13 @@ import pytest
 
 from tenant_auditor.auth.google_client import (
     AuthError,
+    ClientBuildError,
     ServiceAccountConfig,
     build_service_account_config,
     clear_client_cache,
     get_directory_service,
     get_reports_service,
+    get_service,
 )
 from tenant_auditor.config import Settings
 
@@ -241,3 +243,50 @@ def test_fallo_de_directory_si_propaga_error(mock_dir, mock_reports) -> None:
     config = _config_de_prueba()
     with pytest.raises(AuthError, match="directory_v1"):
         collect_tenant_data(config, settings=None)
+
+
+@patch("tenant_auditor.auth.google_client.build")
+@patch("tenant_auditor.auth.google_client.service_account.Credentials.from_service_account_file")
+def test_nombre_de_api_invalido_no_se_reporta_como_error_de_autenticacion(
+    mock_from_file, mock_build
+) -> None:
+    """Regresión del bug que veían los operadores: ``UnknownApiNameOrVersion``.
+
+    El fallo real es de discovery (nombre de API inexistente), no de
+    credenciales. Antes se lanzaba ``AuthError`` y la CLI lo presentaba como
+    «Error de autenticación», lo que mandaba a revisar el sitio equivocado.
+    """
+    from googleapiclient.errors import UnknownApiNameOrVersion
+
+    creds = MagicMock()
+    creds.with_subject.return_value = MagicMock()
+    mock_from_file.return_value = creds
+    mock_build.side_effect = UnknownApiNameOrVersion("name: reports  version: v1")
+
+    with pytest.raises(ClientBuildError) as excinfo:
+        get_service("reports", "v1", _config_de_prueba())
+
+    error = excinfo.value
+    assert not isinstance(error, AuthError)
+    assert "reports:v1" in str(error)
+    assert "discovery" in str(error)
+    assert "antigua" in error.hint
+    assert "tenant-auditor version" in error.hint
+
+
+@patch("tenant_auditor.auth.google_client.build")
+@patch("tenant_auditor.auth.google_client.service_account.Credentials.from_service_account_file")
+def test_api_deshabilitada_sugiere_habilitarla(mock_from_file, mock_build) -> None:
+    """Un 403 de servicio deshabilitado debe apuntar a la consola de APIs."""
+    creds = MagicMock()
+    creds.with_subject.return_value = MagicMock()
+    mock_from_file.return_value = creds
+    mock_build.side_effect = RuntimeError(
+        "HttpError 403: accessNotConfigured. Admin SDK API has not been used in project"
+    )
+
+    with pytest.raises(ClientBuildError) as excinfo:
+        get_directory_service(_config_de_prueba())
+
+    assert "no está habilitada" in str(excinfo.value)
+    assert "Admin SDK API" in excinfo.value.hint

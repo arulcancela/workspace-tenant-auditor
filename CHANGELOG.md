@@ -4,9 +4,39 @@ Todas las modificaciones relevantes de este proyecto se documentan en este
 archivo. El formato está basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/)
 y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
-## [No publicado]
+## [1.1.0] - 2026-10-22
+
+### Añadido
+
+- **Identificación de la build en ejecución** (`diagnostics.py`): `tenant-auditor
+  version` y el nuevo flag `--version` muestran la versión, el commit (o la
+  fecha de la copia), la ruta desde la que se ejecuta el paquete, si procede de
+  un checkout o de un paquete instalado, y los nombres de API en uso
+  (`admin:directory_v1`, `admin:reports_v1`). Además avisa si los metadatos del
+  entorno declaran otra versión distinta de la que se está ejecutando, que es
+  la firma de una instalación antigua o duplicada.
+- **Cabecera de `audit` con la build**: cada ejecución imprime
+  `v1.1.0 (git 9af9ed5)` en lugar de solo el número de versión, para que un
+  informe se pueda atribuir al código que lo generó.
+- **Códigos de salida diferenciados**: `4` para fallo al construir el cliente
+  de una API, separado del `3` de credenciales.
 
 ### Corregido
+
+- **Errores de construcción de cliente ya no se etiquetan como «Error de
+  autenticación»** (`auth/google_client.py`): nueva excepción
+  `ClientBuildError`, distinta de `AuthError`, con la causa clasificada
+  (nombre de API inexistente, API deshabilitada en el proyecto, discovery
+  inaccesible) y una sugerencia accionable. Antes, un fallo de discovery
+  mandaba al operador a revisar credenciales que estaban bien.
+- **Los avisos no fatales incluyen la sugerencia** (`auth/collector.py`): el
+  registro de `TenantData.errors` incorpora el hint del error, de modo que un
+  informe generado parcialmente explica cómo recuperar los checks que faltan.
+
+### Notas
+
+- Los nombres de API se centralizan en `apis.py` para que cliente y diagnóstico
+  no puedan divergir.
 
 - **Paginación rota en la recopilación** (`auth/collector.py`): los endpoints
   `groups`, `members` y `domains` devolvían listas vacías porque `_paginate()`

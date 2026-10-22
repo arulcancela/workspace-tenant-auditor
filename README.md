@@ -164,12 +164,38 @@ tenant-auditor audit --dry-run
 # Listar checks disponibles
 tenant-auditor list-checks
 
-# Versión
-tenant-auditor version
+# Versión, build y APIs en uso
+tenant-auditor version     # también: tenant-auditor --version
 ```
 
 Códigos de salida: `0` OK · `1` hay hallazgos críticos/altos (útil en CI) ·
-`2` check inválido · `3` error de autenticación.
+`2` check inválido · `3` error de credenciales · `4` no se pudo construir el
+cliente de una API (discovery, API deshabilitada o nombre de API obsoleto).
+
+## Solución de problemas
+
+### `tenant-auditor version` te dice qué código estás ejecutando
+
+Cada ejecución de `audit` imprime el identificador de la build en la cabecera
+(`v1.1.0 (git 9af9ed5)`), y `tenant-auditor version` muestra además la ruta del
+paquete, si viene de un checkout o de un paquete instalado, y **qué nombre de
+API usa el cliente de Reports**. Si ahí aparece algo distinto de
+`admin:reports_v1`, estás ejecutando una versión anterior.
+
+### «No se pudo construir el cliente reports:v1» o `UnknownApiNameOrVersion`
+
+La Reports API no es un servicio de discovery independiente: se consume como
+`admin:reports_v1`. Si ves `reports:v1` en el mensaje, el paquete en ejecución
+es anterior al arreglo. Comprueba la build y reinstala:
+
+```bash
+tenant-auditor version
+which -a tenant-auditor          # ¿hay más de una copia en el PATH?
+pip install --force-reinstall "git+https://github.com/arulcancela/workspace-tenant-auditor.git@v1.1.0"
+```
+
+Si el problema es una copia instalada desde otra ruta, el `git pull` del
+repositorio no la actualiza: hay que reinstalar en el mismo entorno.
 
 ## 🎬 Modo demo (sin credenciales)
 
