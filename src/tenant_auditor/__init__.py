@@ -10,5 +10,5 @@ con hallazgos clasificados por severidad.
 Autor: AI-Augmented Engineer & Cloud Automation Architect
 """
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 __author__ = "AI-Augmented Engineer & Cloud Automation Architect"

@@ -20,11 +20,12 @@ Este módulo responde a las preguntas que faltaban:
 
 from __future__ import annotations
 
+import json
 import subprocess
 from dataclasses import dataclass
 from datetime import datetime
 from functools import lru_cache
-from importlib.metadata import PackageNotFoundError
+from importlib.metadata import PackageNotFoundError, distribution
 from importlib.metadata import version as package_version
 from pathlib import Path
 
@@ -106,6 +107,35 @@ def _package_date(package_path: Path) -> str | None:
     return datetime.fromtimestamp(stamp).strftime("%Y-%m-%d %H:%M")
 
 
+def _short_commit(raw: str | None) -> str | None:
+    """Extrae el commit corto de un ``direct_url.json`` (PEP 610).
+
+    Cuando el paquete se instala con ``pip install git+...`` no hay repositorio
+    en disco, pero pip deja constancia de la URL y del commit exacto del que
+    salió el wheel. Sin esto, una instalación desde git solo podría identificarse
+    por la fecha de la copia.
+    """
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    commit = (data.get("vcs_info") or {}).get("commit_id")
+    if not isinstance(commit, str) or not commit:
+        return None
+    return commit[:7]
+
+
+def _commit_from_metadata() -> str | None:
+    """Commit registrado por el gestor de paquetes al instalar desde un VCS."""
+    try:
+        dist = distribution(_DIST_NAME)
+        return _short_commit(dist.read_text("direct_url.json"))
+    except (PackageNotFoundError, OSError):
+        return None
+
+
 def _installed_version() -> str | None:
     """Versión registrada por el gestor de paquetes, si existe."""
     try:
@@ -125,6 +155,8 @@ def build_info() -> BuildInfo:
     if git_root is not None:
         commit = _run_git(git_root, "rev-parse", "--short", "HEAD")
         dirty = bool(_run_git(git_root, "status", "--porcelain", "--untracked-files=no"))
+    if commit is None:
+        commit = _commit_from_metadata()
 
     return BuildInfo(
         version=__version__,

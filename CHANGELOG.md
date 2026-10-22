@@ -4,6 +4,16 @@ Todas las modificaciones relevantes de este proyecto se documentan en este
 archivo. El formato está basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/)
 y el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 
+## [1.1.1] - 2026-10-22
+
+### Corregido
+
+- **Identificación del commit en instalaciones desde git**: cuando el paquete
+  se instala con `pip install git+...` no hay repositorio en disco y `build`
+  caía a la fecha de la copia. Ahora se lee el commit de `direct_url.json`
+  (PEP 610), que pip escribe en la instalación, de modo que cada ejecución se
+  puede atribuir al commit exacto del que salió.
+
 ## [1.1.0] - 2026-10-22
 
 ### Añadido

@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
-from tenant_auditor.diagnostics import BuildInfo, build_info
+from tenant_auditor.diagnostics import BuildInfo, _short_commit, build_info
 
 
 def test_build_info_declara_las_apis_reales() -> None:
@@ -54,3 +55,27 @@ def test_version_mismatch_falso_si_coincide_o_no_hay_instalacion() -> None:
     }
     assert BuildInfo(version="1.1.0", installed_version="1.1.0", **base).version_mismatch is False
     assert BuildInfo(version="1.1.0", installed_version=None, **base).version_mismatch is False
+
+
+def test_short_commit_lee_el_direct_url_de_pip() -> None:
+    """Una instalación con ``pip install git+...`` no tiene .git, solo metadatos."""
+    raw = json.dumps(
+        {
+            "url": "https://github.com/arulcancela/workspace-tenant-auditor.git",
+            "vcs_info": {
+                "vcs": "git",
+                "commit_id": "f5f0c60abc123",
+                "requested_revision": "v1.1.0",
+            },
+        }
+    )
+    assert _short_commit(raw) == "f5f0c60"
+
+
+def test_short_commit_tolera_metadatos_ausentes_o_no_vcs() -> None:
+    assert _short_commit(None) is None
+    assert _short_commit("no es json") is None
+    assert (
+        _short_commit(json.dumps({"url": "file:///tmp/x", "dir_info": {"editable": True}})) is None
+    )
+    assert _short_commit(json.dumps({"vcs_info": {"commit_id": ""}})) is None
